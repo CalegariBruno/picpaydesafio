@@ -25,7 +25,11 @@ public class TransactionService {
     @Autowired
     private RestTemplate restTemplate;
 
-    public void createTransaction(TransactionDTO transaction) throws Exception {
+    @Autowired
+    private NotificationService notificationService;
+
+    public Transaction createTransaction(TransactionDTO transaction) throws Exception {
+
         User sender = this.userService.findUserById(transaction.senderId());
         User receiver = this.userService.findUserById(transaction.receiverId());
 
@@ -43,18 +47,28 @@ public class TransactionService {
         newtransaction.setSender(sender);
         newtransaction.setTimestamp(LocalDateTime.now());
 
+        sender.setBalance(sender.getBalance().subtract(transaction.value()));
+        receiver.setBalance(receiver.getBalance().add(transaction.value()));
+
         this.repository.save(newtransaction);
         this.userService.saveUser(sender);
         this.userService.saveUser(receiver);
+
+        this.notificationService.sendNotification(sender, "Transação realizada com sucesso!");
+        this.notificationService.sendNotification(receiver, "Transação recebida com sucesso!");
+
+        return newtransaction;
     }
 
     public boolean authorizeTransaction(User sender, BigDecimal value){
+
         ResponseEntity<Map> authorizeResponse = restTemplate.getForEntity("https://run.mocky.io/v3/5794d450-d2e2-4412-8131-73d0293ac1cc", Map.class);
 
         if (authorizeResponse.getStatusCode() == HttpStatus.OK){
             String message = (String) authorizeResponse.getBody().get("message");
             return "Autorizado".equalsIgnoreCase(message);
         }else return false;
+
     }
 
 
